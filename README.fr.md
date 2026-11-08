@@ -2,8 +2,8 @@
 
 [English](README.md) · **Français**
 
-Tableau de bord de vos **meilleurs temps au tour sur Le Mans Ultimate**, par classe et par circuit, dans le style de
-l'interface du jeu. Vos temps y sont comparés aux temps de référence de la communauté.
+Tableau de bord de vos **meilleurs temps au tour sur Le Mans Ultimate**, par classe et par circuit. 
+Vos temps y sont comparés aux temps de référence de la communauté.
 
 ![Aperçu du tableau de bord](docs/apercu.png)
 
@@ -53,26 +53,32 @@ fichiers de résultats que le jeu écrit à la fin de chaque session.
 ## Questions fréquentes
 
 **« Le Mans Ultimate est introuvable »**
+
 Le jeu est cherché dans toutes vos bibliothèques Steam. S'il n'est pas trouvé, ouvrez les réglages (roue crantée) et
 choisissez son dossier avec **Parcourir…** : c'est le dossier `Le Mans Ultimate`, dans `steamapps\common`.
 
 **Mon nom de pilote n'est pas le bon**
+
 Le nom est déduit de vos fichiers de résultats. Pour l'imposer, saisissez-le dans les réglages (roue crantée) :
 tous vos résultats sont alors relus avec ce nom.
 
 **LMU Chrono a-t-il besoin de droits particuliers ?**
+
 Non. Il lit les fichiers du jeu sans les modifier, n'a pas besoin des droits administrateur, et n'écrit que dans son
 dossier de données.
 
 **Mon antivirus bloque l'exécutable**
+
 Les exécutables fabriqués avec PyInstaller sont parfois signalés à tort. Le code source est entièrement disponible
 dans ce dépôt, et l'exécutable de chaque version est fabriqué automatiquement par GitHub à partir de ce code.
 
 **Rien ne s'affiche après le double-clic**
+
 La première mise à jour prend quelques secondes, puis la page s'ouvre. Si une erreur survient, un message s'affiche ;
 les détails sont dans `%LOCALAPPDATA%\LMU Chrono\lmu-chrono.log`.
 
 **Désinstaller**
+
 Réglages (roue crantée) > **Désinstaller LMU Chrono…** : le programme, son raccourci et ses données sont supprimés.
 Rien n'est installé ailleurs, ni dans le registre.
 

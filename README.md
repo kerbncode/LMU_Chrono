@@ -2,8 +2,8 @@
 
 **English** · [Français](README.fr.md)
 
-A dashboard of your **best lap times in Le Mans Ultimate**, per class and per track, styled like the game's own
-interface. Your times are compared with the community's reference times.
+A dashboard of your **best lap times in Le Mans Ultimate**, per class and per track. 
+Your times are compared with the community's reference times.
 
 ![Dashboard preview](docs/preview.png)
 
@@ -49,26 +49,32 @@ writes at the end of every session.
 ## FAQ
 
 **“Le Mans Ultimate not found”**
+
 The game is searched for in all your Steam libraries. If it is not found, open the settings (gear) and choose its
 folder with **Browse…**: it is the `Le Mans Ultimate` folder, inside `steamapps\common`.
 
 **My driver name is wrong**
+
 The name is deduced from your result files. To force it, type it in the settings (gear): all your results are then
 re-read with that name.
 
 **Does LMU Chrono need special permissions?**
+
 No. It reads the game files without modifying them, does not need administrator rights, and only writes to its own
 data folder.
 
 **My antivirus blocks the executable**
+
 Executables built with PyInstaller are sometimes flagged by mistake. The complete source code is in this repository,
 and the executable of each version is built automatically by GitHub from that code.
 
 **Nothing appears after the double-click**
+
 The first update takes a few seconds, then the page opens. If an error occurs, a message is shown; the details are
 in `%LOCALAPPDATA%\LMU Chrono\lmu-chrono.log`.
 
 **Uninstall**
+
 Settings (gear) > **Uninstall LMU Chrono…**: the program, its shortcut and its data are deleted. Nothing is installed
 anywhere else, not even in the registry.
 

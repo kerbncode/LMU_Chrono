@@ -1,2 +1,7 @@
+# Fins de ligne : LF dans le dépôt et sur le disque pour les fichiers texte, sans conversion automatique de Git sur
+# Windows (c'est elle qui produit l'avertissement « LF will be replaced by CRLF »). Les fichiers binaires (images,
+# icône) sont reconnus tout seuls et ne sont pas touchés.
+* text=auto eol=lf
+
 # Le script de fabrication de l'exécutable doit garder des fins de ligne Windows (CRLF) : cmd lit mal un .bat en LF
 *.bat text eol=crlf
