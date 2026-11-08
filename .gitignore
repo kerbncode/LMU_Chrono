@@ -1,0 +1,22 @@
+# Données personnelles et fichiers générés (recréés à chaque lancement)
+lmu.db
+settings.json
+Meilleurs_Temps_LMU.html
+.raccourci_cree
+lmu-chrono.log
+
+# Fichiers lus dans l'installation du jeu ou téléchargés : jamais redistribués
+assets/
+
+# Fabrication de l'exécutable
+.venv/
+build/
+dist/
+*.spec
+__pycache__/
+
+# Fichiers de travail locaux
+old/
+.claude/
+*.pptx
+~$*

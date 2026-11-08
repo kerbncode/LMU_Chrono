@@ -1,0 +1,26 @@
+﻿# Publication d'une version : quand une « release » est publiée sur GitHub (page Releases > Draft a new release),
+# l'exécutable est fabriqué sur une machine Windows de GitHub puis joint automatiquement à cette release.
+name: Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Fabrication de l'exécutable
+        shell: cmd
+        run: build_exe.bat
+      - name: Ajout de l'exécutable à la release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/LMU-Chrono.exe

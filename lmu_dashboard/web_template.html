@@ -1,0 +1,1152 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LMU Chrono</title>
+<link rel="icon" id="favicon">
+<script>
+  // Thème : choix mémorisé (clair / sombre) ou, à défaut, celui du système. Posé sur <html data-theme> avant
+  // l'affichage, pour éviter un flash de la mauvaise couleur ; les couleurs sombres dépendent de cet attribut.
+  (function () {
+    let choice = "auto";
+    try { choice = localStorage.getItem("lmu-theme") || "auto"; } catch {}
+    const system = matchMedia("(prefers-color-scheme: dark)");
+    const apply = () => {
+      document.documentElement.dataset.theme = choice === "auto" ? (system.matches ? "dark" : "light") : choice;
+    };
+    apply();
+    system.addEventListener("change", () => { if (choice === "auto") apply(); });
+    window.lmuTheme = {
+      get: () => choice,
+      set(value) {
+        choice = value;
+        try { value === "auto" ? localStorage.removeItem("lmu-theme") : localStorage.setItem("lmu-theme", value); } catch {}
+        apply();
+      },
+    };
+  })();
+</script>
+<style>
+  :root {
+    --bg: #f3f4f7;
+    --surface: #ffffff;
+    --line: #e2e4ea;
+    --ink: #14161c;
+    --ink-2: #4a4f5c;
+    --ink-3: #80869a;
+    --track: #e8eaf0;
+    --t-alien: #8b3ffd;
+    --t-comp: #12a150;
+    --t-good: #2d8cf0;
+    --t-mid: #d99a00;
+    --t-tail: #e8590c;
+    --t-off: #d6336c;
+    --shadow: 0 1px 2px rgba(20, 22, 28, .06), 0 4px 16px rgba(20, 22, 28, .05);
+    color-scheme: light;
+  }
+  /* Thème sombre (html[data-theme], posé par le script de tête : choix de l'utilisateur ou thème du système) */
+  :root[data-theme="dark"] {
+    --bg: #0c0d11;
+    --surface: #15171d;
+    --line: #262a35;
+    --ink: #f1f2f5;
+    --ink-2: #b4b8c5;
+    --ink-3: #7d8294;
+    --track: #252935;
+    --t-alien: #a970ff;
+    --t-comp: #2fc26b;
+    --t-good: #4ea3ff;
+    --t-mid: #f0b429;
+    --t-tail: #ff7a3d;
+    --t-off: #f0567f;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px rgba(0, 0, 0, .25);
+    color-scheme: dark;
+  }
+
+  /* Couleurs de la charte Le Mans Ultimate */
+  :root {
+    --lmu-red: #e8063c;
+    --lmu-orange: #f0502a;
+    --lmu-blue: #4a86c5;
+    --lmu-deep: #1d56a6;
+    --lmu-slate: #3d4b7c;
+    --lmu-pink: #e80d4a;
+    --band: 7%;             /* intensité des bandes en arrière-plan de page */
+    /* Polices de l'interface du jeu (Bin\UI.zip), rôles repris du CSS de LMU : Antonio pour les titres, Heebo pour le texte.
+       Antonio n'existe qu'en SemiBold dans le jeu : elle s'emploie sans gras ni italique. */
+    --ff-heading: "LMU Antonio", "Antonio", sans-serif;
+  }
+  :root[data-theme="dark"] { --band: 11%; }
+
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body {
+    margin: 0;
+    color: var(--ink);
+    font: 15px/1.45 "LMU Heebo", "Heebo", "Segoe UI", system-ui, sans-serif;
+    min-height: 100vh;
+    background:
+      linear-gradient(118deg,
+        color-mix(in srgb, var(--lmu-red) var(--band), transparent) 0 14%,
+        transparent 14% 66%,
+        color-mix(in srgb, var(--lmu-blue) var(--band), transparent) 66% 84%,
+        color-mix(in srgb, var(--lmu-slate) var(--band), transparent) 84% 93%,
+        color-mix(in srgb, var(--lmu-pink) var(--band), transparent) 93%) fixed,
+      var(--bg);
+  }
+  /* Largeur max de la page : 1520px, ou celle du tableau si elle est plus grande (--table-full-w, posée par
+     measureColumns()) : la barre de défilement horizontale n'apparaît que si la fenêtre est trop étroite */
+  .wrap { max-width: max(1520px, calc(var(--table-full-w, 0px) + 40px)); margin: 0 auto; padding: 20px 20px 48px; }
+
+  /* En-tête : bandeau compact aux couleurs de l'écran titre du jeu */
+  header {
+    position: relative; overflow: hidden; isolation: isolate;
+    padding: 16px 26px; border-radius: 16px; color: #fff;
+    display: flex; flex-wrap: wrap; gap: 18px 28px; align-items: center; justify-content: space-between;
+    background: linear-gradient(118deg,
+      var(--lmu-deep) 0 5%,
+      var(--lmu-red) 5%, #ec2236 32%, var(--lmu-orange) 56%,
+      var(--lmu-blue) 56% 79%,
+      var(--lmu-slate) 79% 90%,
+      var(--lmu-pink) 90%);
+    box-shadow: 0 10px 30px rgba(20, 22, 40, .25);
+  }
+  header::before {
+    /* fines rayures diagonales, comme sur l'écran titre */
+    content: ""; position: absolute; inset: 0; z-index: -1;
+    background: repeating-linear-gradient(118deg, rgba(255, 255, 255, .07) 0 2px, transparent 2px 18px);
+    mask: linear-gradient(90deg, #000 0 30%, transparent 55%, transparent 80%, #000);
+  }
+  .brand { display: flex; align-items: center; gap: 22px; }
+  /* Monogramme « LM » du jeu, en blanc intégral */
+  .brand-logo { height: 42px; width: auto; display: block; filter: brightness(0) invert(1) drop-shadow(0 2px 6px rgba(0, 0, 0, .25)); }
+  /* Remplaçant du logo si le jeu n'a pas pu être lu */
+  .brand-mark {
+    width: 44px; height: 44px; border-radius: 10px; background: #fff; color: var(--lmu-red);
+    display: grid; place-items: center; font-weight: 900; font-size: 15px; letter-spacing: .5px;
+    transform: skewX(-8deg);
+  }
+  .brand-text { padding-left: 22px; border-left: 2px solid rgba(255, 255, 255, .45); }
+  h1 { margin: 0; font: normal 26px/1.1 var(--ff-heading); letter-spacing: .5px; text-transform: uppercase; }
+  /* Classe affichée après le titre, dans une pastille blanche (comme l'encart des boutons) à la couleur de la classe */
+  .h1-class {
+    display: inline-block; margin-left: 12px; padding: 0 8px 0.06em; border-radius: 6px; vertical-align: 0.1em;
+    background: rgba(255, 255, 255, .92); color: var(--c); font-size: .8em;
+  }
+  /* Nom du joueur sous le titre */
+  .sub { margin-top: 3px; font: normal 16px/1.1 var(--ff-heading); letter-spacing: .5px; text-transform: uppercase;
+         color: rgba(255, 255, 255, .85); }
+
+  /* Encart blanc à droite du bandeau (badges de classe, séparateur, bouton d'actualisation) :
+     fait ressortir les badges comme sur l'écran de résultats du jeu */
+  .controls {
+    display: flex; align-items: center; gap: 8px; padding: 5px;
+    background: rgba(255, 255, 255, .92); border-radius: 12px;
+  }
+  .controls-sep { width: 1px; align-self: stretch; margin: 6px 2px; background: rgba(20, 22, 28, .2); }
+  .tabs { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; }
+  .tab { appearance: none; border: none; background: none; padding: 2px 4px; cursor: pointer; display: inline-flex; }
+  /* Badge de classe repris de l'interface du jeu (écran de résultats, Bin\UI.zip : .race-table .vehicle-class-label),
+     ajusté d'après des captures du jeu (coins, taille du texte, triangle ELMS).
+     Version 1 (repos)              : fond blanc, texte et cadre à la couleur de la classe
+     Version 2 (survol / sélection) : règle .highlight du jeu, fond à la couleur de la classe, texte blanc
+     Taille : carré de --badge-size ; tout le reste en découle. */
+  .class-badge {
+    --badge-size: 32px;
+    box-sizing: border-box; display: flex; justify-content: center; align-items: center;
+    width: var(--badge-size); height: var(--badge-size);
+    border: solid calc(var(--badge-size) * 0.07) var(--c); border-radius: calc(var(--badge-size) * 0.14);
+    background-color: rgb(255, 255, 255); color: var(--c);
+    font-family: var(--ff-heading); font-size: calc(var(--badge-size) * 0.66);
+    line-height: 1; text-transform: uppercase;
+    letter-spacing: -0.02em; text-indent: -0.02em;  /* text-indent compense l'espacement après la dernière lettre */
+    /* Antonio place ses majuscules sous le centre de la ligne : on remonte le texte pour le centrer verticalement */
+    padding: 0 0 0.12em;
+  }
+  /* 2 lettres (HY, P2, P3) : texte plus grand, comme dans le jeu ; 3 lettres (GT3, GTE) : taille limitée par la largeur du carré */
+  .class-badge.short { font-size: calc(var(--badge-size) * 0.75); }
+  /* Le jeu retire le cadre (border: none) ; ici il prend la couleur du fond pour que le badge ne change pas de taille */
+  .tab:hover .class-badge,
+  .tab[aria-selected="true"] .class-badge {
+    border-color: var(--c); background-color: var(--c); color: rgb(255, 255, 255);
+  }
+  /* Triangle de coin (LMP2 ELMS), règle .vehicle-class-label.lmp2_elms::after du jeu : collé au coin extérieur
+     (par-dessus le cadre), côtés d'environ 38 % du badge, arrondi comme le coin ; visible dans les deux versions.
+     Découpé au bord extérieur du badge : quand le badge tombe sur une position fractionnaire, le cadre est
+     calé sur le pixel entier mais pas le triangle, qui dépassait alors d'un pixel en haut */
+  .class-badge.corner { position: relative; overflow: clip; overflow-clip-margin: border-box; }
+  .class-badge.corner::after {
+    content: ""; position: absolute;
+    top: calc(var(--badge-size) * -0.07); right: calc(var(--badge-size) * -0.07);
+    border-style: solid; border-color: transparent; border-width: calc(var(--badge-size) * 0.19);
+    border-top-color: var(--corner); border-right-color: var(--corner);
+    border-top-right-radius: calc(var(--badge-size) * 0.14);
+  }
+
+  /* Boutons icône de l'encart : actualisation des données XML (date de mise à jour en info-bulle), réglages */
+  .icon-btn {
+    appearance: none; width: 36px; height: 36px; border-radius: 8px; cursor: pointer;
+    border: none; background: transparent; color: #14161c;
+    display: grid; place-items: center; padding: 0; transition: background .15s;
+  }
+  .icon-btn:hover:not(:disabled), .icon-btn[aria-expanded="true"] { background: rgba(20, 22, 28, .08); }
+  .icon-btn:disabled { cursor: default; opacity: .5; }
+  .icon-btn .ico { display: block; font-size: 20px; line-height: 1; }
+  .icon-btn svg.ico { width: 20px; height: 20px; fill: currentColor; }
+  .icon-btn.busy { opacity: 1; }
+  .icon-btn.busy .ico { animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Réglages (roue crantée) : fenêtre sous le bouton, hors du bandeau (qui masque ce qui dépasse) */
+  .settings {
+    position: absolute; z-index: 40; width: min(420px, calc(100vw - 32px)); padding: 6px 18px 16px;
+    background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 12px;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, .35);
+  }
+  .settings-title {
+    padding: 10px 0 6px; margin-bottom: 12px; border-bottom: 2px solid var(--c);
+    font: normal 17px/1.45 var(--ff-heading); letter-spacing: 1px; text-transform: uppercase;
+  }
+  .settings label, .settings-label { display: block; margin: 12px 0 5px; font-size: 13px; font-weight: 600; color: var(--ink-2); }
+  /* Choix du thème : trois boutons accolés, le choix actif à la couleur de la classe */
+  .segmented { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .segmented button {
+    flex: 1; appearance: none; border: none; background: none; padding: 7px 8px; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+    font: inherit; font-size: 13px; font-weight: 600; color: var(--ink-2);
+  }
+  /* Drapeaux du choix de langue (ceux du jeu, 4:3) */
+  .lang-flag { height: 13px; width: calc(13px * 4 / 3); object-fit: cover; box-shadow: 0 0 0 1px rgba(0, 0, 0, .25); }
+  .segmented button + button { border-left: 1px solid var(--line); }
+  .segmented button:hover { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+  .segmented button[aria-pressed="true"] { background: var(--c); color: #fff; }
+  .settings input {
+    width: 100%; min-width: 0; padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px;
+    background: var(--bg); color: var(--ink); font: inherit; font-size: 14px;
+  }
+  .settings input:focus { outline: 2px solid var(--c); outline-offset: -1px; }
+  .field-row { display: flex; gap: 8px; }
+  .field-hint { margin-top: 4px; font-size: 12px; color: var(--ink-3); }
+  .settings-error { margin-top: 12px; padding: 8px 10px; border-radius: 8px; font-size: 13px;
+                    color: var(--t-off); background: color-mix(in srgb, var(--t-off) 12%, transparent); }
+  .settings-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+  .btn {
+    appearance: none; padding: 7px 14px; border-radius: 8px; cursor: pointer; white-space: nowrap;
+    border: 1px solid var(--line); background: color-mix(in srgb, var(--ink) 5%, transparent); color: var(--ink);
+    font: inherit; font-size: 14px; font-weight: 600;
+  }
+  .btn:hover:not(:disabled) { background: color-mix(in srgb, var(--ink) 10%, transparent); }
+  .btn:disabled { cursor: default; opacity: .6; }
+  .btn.primary { border-color: transparent; background: var(--c); color: #fff; }
+  .btn.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--c) 85%, #000); }
+  .settings-danger { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); }
+  .btn-link { appearance: none; border: none; background: none; padding: 0; cursor: pointer; font: inherit; font-size: 13px; }
+  .btn-link.danger { color: var(--t-off); }
+  .btn-link.danger:hover { text-decoration: underline; }
+  /* Page après la désinstallation */
+  .goodbye { min-height: 100vh; display: grid; place-content: center; gap: 8px; text-align: center; padding: 24px; }
+  .goodbye h1 { font-size: 26px; }
+  .goodbye p { margin: 0; color: var(--ink-2); }
+  .toast {
+    position: fixed; right: 20px; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); max-width: min(420px, calc(100% - 40px));
+    background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-left: 4px solid var(--t-comp);
+    border-radius: 10px; padding: 12px 16px; box-shadow: var(--shadow); font-size: 14px;
+  }
+  .toast.error { border-left-color: var(--t-off); }
+
+  /* Indicateurs sur le fond de la page, sous le bandeau, titre souligné à la couleur de la classe (comme
+     QUALIFICATION / COURSE). Leur largeur suit celle du tableau hors colonne NB (--table-w, posée par measureColumns()). */
+  .kpis {
+    /* Encarts courts (Circuits, Écart moyen) deux fois moins larges que les encarts « valeur | circuit » ;
+       28px entre encarts, comme les espaces entre blocs du tableau */
+    display: grid; grid-template-columns: 1fr 2fr 1fr 2fr; gap: 0 28px;
+    width: var(--table-w, 100%); max-width: 100%; margin: 0 auto 24px; padding-top: 12px;
+  }
+  .kpi { text-align: center; padding-bottom: 10px; }
+  .kpi .label {
+    padding: 10px 12px 6px; border-bottom: 2px solid var(--c);
+    font: normal 15px/1.45 var(--ff-heading); letter-spacing: 1px; text-transform: uppercase; color: var(--ink);
+  }
+  .kpi .value { font: normal 26px/1.15 var(--ff-heading); margin-top: 10px; font-variant-numeric: tabular-nums; }
+  /* Valeur + circuit (Meilleur écart, Dernière session) : séparés par une barre centrée dans l'encart
+     (grille 1fr | barre | 1fr), contenu centré dans chacune des deux sous-cases */
+  .kpi .value.split { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; column-gap: 14px; }
+  .kpi .v-main, .kpi .v-track { justify-self: center; white-space: nowrap; }
+  .kpi .v-track { text-transform: uppercase; }   /* nom du circuit en majuscules, comme dans le tableau */
+  .kpi .v-sep { width: 1px; height: 0.8em; background: color-mix(in srgb, var(--ink) 35%, transparent); }
+  .kpi .hint { font-size: 13px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 8px; }
+  /* Encarts cliquables : Meilleur écart / Dernière session → ligne du circuit, Écart moyen → tri par écart */
+  .kpi:is([data-circuit], [data-k="avg"]) { cursor: pointer; border-radius: 10px; transition: background .15s; }
+  .kpi:is([data-circuit], [data-k="avg"]):hover { background: color-mix(in srgb, var(--c) 12%, transparent); }
+  @keyframes flash-row { from { background: color-mix(in srgb, var(--c) 40%, transparent); } to { background: transparent; } }
+  tbody tr.flash td { animation: flash-row 2.4s ease-out; }
+
+  /* Tableau « verre » : lignes transparentes (fond flouté au survol seulement), séparateurs marqués, sans bord latéral */
+  .scroll { overflow-x: auto; }
+  .scroll > table { margin: 0 auto; }   /* tableau centré dans la page */
+  /* Largeurs fixées par measureColumns() (JS) : identiques pour toutes les classes, table pas étirée au-delà de son contenu */
+  table { width: auto; table-layout: fixed; border-collapse: separate; border-spacing: 0; }
+  thead tr.groups th {
+    font: normal 17px/1.45 var(--ff-heading); letter-spacing: 1px; text-transform: uppercase; color: var(--ink);
+    padding: 10px 12px 6px; text-align: center; border-bottom: 2px solid var(--c);
+  }
+  thead tr.groups th.blank { border-bottom-color: transparent; }
+  thead tr.cols th {
+    font-size: 12px; font-weight: 400; color: var(--ink-3); text-transform: uppercase; letter-spacing: .6px;
+    padding: 8px 12px; text-align: left; white-space: nowrap; cursor: pointer; user-select: none;
+    border-bottom: 2px solid color-mix(in srgb, var(--ink) 28%, transparent);
+  }
+  thead tr.cols th:hover { color: var(--ink); }
+  thead tr.cols th .arrow { opacity: 0; margin-left: 4px; }
+  thead tr.cols th.sorted .arrow { opacity: 1; color: var(--ink); }
+  /* Espace vide entre les blocs Circuit / Qualification / Course / Référence. Le trait horizontal y est remplacé
+     par un pointillé : le pointillé CSS natif (dotted) n'a pas d'espacement réglable, les points (2px, vide de
+     --dot-gap) sont donc dessinés par un dégradé répété posé à la place du trait.
+     !important : doit l'emporter sur les traits de l'en-tête (thead tr.groups th…) et le fond de survol */
+  table .spacer {
+    width: 28px; padding: 0 !important;
+    --dot-color: color-mix(in srgb, var(--ink) 28%, transparent);
+    --dot-gap: 5px;
+    border-bottom-color: transparent !important;
+    background: repeating-linear-gradient(90deg, var(--dot-color) 0 2px, transparent 2px calc(2px + var(--dot-gap)))
+                left bottom / 100% 2px no-repeat border-box !important;
+    backdrop-filter: none !important;
+  }
+  thead tr.groups th.spacer { --dot-color: var(--c); }   /* pointillé à la couleur de la classe sous les titres de groupe */
+  /* Pas de pointillé avant « Qualification » (la colonne Circuit n'a pas de trait de couleur à relier) */
+  thead tr.groups th.blank + th.spacer { --dot-color: transparent; }
+  /* Centrage vertical mesuré sur l'encre, entre les traits de séparation : Heebo dessine chiffres et majuscules
+     1 à 2 px au-dessus du centre de sa ligne (place réservée aux jambages) ; les cellules de texte sont donc
+     descendues d'1 px (6px en haut, 4px en bas). La colonne Circuit (tracé, drapeau, Antonio) reste à 5 / 5. */
+  tbody td {
+    padding: 6px 12px 4px; vertical-align: middle; white-space: nowrap;
+    background: transparent;
+    border-bottom: 2px solid color-mix(in srgb, var(--ink) 28%, transparent);
+  }
+  tbody tr:hover td {
+    background: color-mix(in srgb, var(--c) 14%, color-mix(in srgb, var(--surface) 50%, transparent));
+    backdrop-filter: blur(12px) saturate(1.3);
+  }
+
+  /* Circuit façon écran du jeu : tracé blanc | trait vertical | drapeau + nom en majuscules */
+  .circ { display: flex; align-items: center; gap: 12px; }
+  .cg-visual { flex: 0 0 auto; width: 58px; height: 40px; display: grid; place-items: center; }
+  .cg-visual img { max-width: 58px; max-height: 40px; object-fit: contain; }
+  /* Tracés dessinés en blanc (comme dans le jeu) : passés en gris foncé sur fond clair */
+  [data-theme="light"] .cg-visual img { filter: invert(1) brightness(.35); }
+  .cg-sep { flex: 0 0 auto; width: 1px; align-self: stretch; margin: 2px 0; background: color-mix(in srgb, var(--ink) 55%, transparent); }
+  /* Drapeau + nom : le drapeau a la hauteur des lettres (majuscules d'Antonio = 0.85 em) et est centré sur elles */
+  .cg-label { display: flex; align-items: center; gap: 0.6em; font-family: var(--ff-heading); font-size: 17px; line-height: 1; }
+  .cg-flag { flex: 0 0 auto; height: 0.85em; width: calc(0.85em * 4 / 3); object-fit: cover; }
+  .cg-name {
+    text-transform: uppercase; letter-spacing: 0.3px; color: var(--ink);
+    padding-bottom: 0.25em;  /* Antonio place ses majuscules sous le centre de la ligne : on les remonte au centre */
+  }
+  tbody td:first-child { padding-block: 5px; }   /* colonne Circuit : déjà centrée (voir tbody td) */
+
+  /* Colonne NB (sessions roulées), au plus juste : 4 chiffres, largeur posée par measureColumns() */
+  tbody td.sessions { padding-inline: 4px; text-align: center; font-variant-numeric: tabular-nums; color: var(--ink-2); font-weight: 600; }
+  /* En-tête court (« Nb ») ; la flèche de tri est posée par-dessus pour ne pas élargir la colonne */
+  thead tr.cols th.num { position: relative; padding-inline: 4px; text-align: center; }
+  thead tr.cols th.num .arrow { position: absolute; margin-left: 1px; }
+
+  /* Voiture : logo de la marque (jeu) + modèle. flex (et non inline-flex) : le bloc est centré verticalement
+     dans la cellule comme le temps, au lieu d'être posé sur la ligne de base du texte */
+  .car { color: var(--ink-2); font-size: 13px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; }
+  .brand-car { display: flex; align-items: center; gap: 8px; }
+  .brand-car > span:last-child { position: relative; top: 1px; }   /* modèle : son encre est 1 px plus haute que le logo */
+  /* Logos du jeu (en couleurs, proportions variables) : version fond clair par défaut, version fond sombre en thème sombre */
+  .logo { flex: 0 0 auto; width: auto; max-width: 46px; height: 22px; object-fit: contain; }
+  .logo.on-dark { display: none; }
+  [data-theme="dark"] .logo.on-light { display: none; }
+  [data-theme="dark"] .logo.on-dark { display: inline-block; }
+  .brand-name { font-weight: 700; color: var(--ink); font-size: 12px; letter-spacing: .4px; text-transform: uppercase; }
+  .time { font-variant-numeric: tabular-nums; font-weight: 600; font-size: 15px; letter-spacing: .2px; }
+  .time.best { color: var(--ink); font-weight: 700; }
+  .time.best::after { content: "★"; font-size: 11px; margin-left: 5px; color: var(--t-alien); vertical-align: 1px; }
+  .time.other { color: var(--ink-2); font-weight: 400; }
+  /* Badge « NEW » (nouveau record), à la place de l'étoile à côté du temps : texte blanc gras, centré, sur une
+     forme rouge aux coins arrondis, coupée en biais à droite. Un clip-path ne sait pas arrondir : la forme est
+     dessinée sous le texte par deux pseudo-éléments arrondis, un rectangle (bord gauche droit) et un
+     parallélogramme incliné qui forme le bord droit (6 px de biais sur 12 px de haut, soit 26,57°). */
+  .time.has-record::after { content: none; }
+  .record-badge {
+    display: inline-block; position: relative; isolation: isolate; margin-left: 6px; padding: 1px 9px 0 3px;
+    vertical-align: 1px; color: #fff; font-size: 11px; font-weight: 700; line-height: 11px; letter-spacing: .2px;
+    cursor: default;
+  }
+  .record-badge::before, .record-badge::after {
+    content: ""; position: absolute; top: 0; bottom: 0; z-index: -1; border-radius: 3px; background: var(--lmu-red);
+  }
+  .record-badge::before { left: 0; right: 6px; }
+  .record-badge::after { left: 40%; right: 6px; transform: skewX(-26.57deg); transform-origin: 0 100%; }
+  /* Date sur deux lignes : remise à 5 / 5 (centrée sur l'encre, mesurée entre les traits) */
+  tbody td.date-cell { padding-top: 5px; padding-bottom: 5px; }
+  .day { display: block; color: var(--ink-2); font-size: 13px; font-variant-numeric: tabular-nums; }
+  .hour { display: block; color: var(--ink-3); font-size: 11px; font-variant-numeric: tabular-nums; line-height: 1.2; }
+  .empty { color: var(--ink-3); }
+  .alien { font-variant-numeric: tabular-nums; color: var(--ink-2); }
+
+  /* Écart au temps de référence : pourcentage, jauge graduée par palier, palier */
+  .gap { display: flex; align-items: center; gap: 10px; }
+  .gap .pct { font-variant-numeric: tabular-nums; font-weight: 700; width: 58px; text-align: right; }
+  .meter { position: relative; flex: 0 0 96px; height: 8px; background: var(--track); border-radius: 4px; }
+  .meter .fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; background: var(--tier); }
+  .meter .tick { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--surface); }
+  .badge {
+    flex: 0 0 auto; width: 96px; text-align: center;
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; padding: 2px 8px; border-radius: 4px;
+    color: var(--tier); background: color-mix(in srgb, var(--tier) 14%, transparent);
+  }
+
+  /* Page d'une classe sans session : message centré sous l'en-tête du tableau */
+  .none-row td { text-align: center; color: var(--ink-3); padding: 28px; }
+  tbody tr.none-row:hover td { background: transparent; backdrop-filter: none; }
+  .empty-state { padding: 36px 0 30px; white-space: normal; }
+  .empty-title { font: normal 18px/1.45 var(--ff-heading); color: var(--ink); text-transform: uppercase; letter-spacing: 1px; }
+  .empty-hint { margin-top: 6px; font-size: 14px; color: var(--ink-3); }
+  footer { margin-top: 18px; color: var(--ink-3); font-size: 12px; }
+  footer a { color: inherit; }
+  /* Messages d'aide (premier lancement : aucune session, tracés manquants) */
+  .notices {
+    width: var(--table-w, 100%); max-width: 100%; margin: 14px auto 0; padding: 8px 14px; border-radius: 8px;
+    border-left: 3px solid var(--t-mid); background: color-mix(in srgb, var(--surface) 70%, transparent);
+    font-size: 13px; color: var(--ink-2);
+  }
+  .notices p { margin: 0; }
+
+  @media (max-width: 900px) {
+    .kpis { grid-template-columns: 1fr 2fr; }
+  }
+  @media (max-width: 640px) {
+    h1 { font-size: 22px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="toast" id="toast" hidden></div>
+
+  <header>
+    <div class="brand">
+      <img class="brand-logo" id="brand-logo" alt="Le Mans Ultimate" hidden>
+      <div class="brand-mark" id="brand-mark">LMU</div>
+      <div class="brand-text">
+        <h1><span data-i18n="title"></span><span class="h1-class" id="h1-class"></span></h1>
+        <div class="sub" id="player"></div>
+      </div>
+    </div>
+    <!-- Encart à droite du bandeau : boutons de classe | séparateur | actualisation -->
+    <div class="controls">
+      <nav class="tabs" id="tabs" role="tablist"></nav>
+      <span class="controls-sep" aria-hidden="true"></span>
+      <button class="icon-btn" id="refresh-xml" data-i18n-aria="refresh_aria"><span class="ico">↻</span></button>
+      <!-- Roue crantée (icône « settings » de Material Design, licence Apache 2.0) -->
+      <button class="icon-btn" id="settings-btn" data-i18n-aria="settings_title" aria-haspopup="dialog" aria-expanded="false">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <div class="settings" id="settings" role="dialog" data-i18n-aria="settings_title" hidden>
+    <div class="settings-title" data-i18n="settings_title"></div>
+    <div class="settings-label" id="lang-label" data-i18n="lang_label"></div>
+    <div class="segmented" id="lang-choice" role="radiogroup" aria-labelledby="lang-label"></div>
+    <div class="settings-label" id="theme-label" data-i18n="theme_label"></div>
+    <div class="segmented" id="theme-choice" role="radiogroup" aria-labelledby="theme-label">
+      <button type="button" data-v="auto" data-i18n="theme_auto"></button><button type="button" data-v="light" data-i18n="theme_light"></button><button type="button" data-v="dark" data-i18n="theme_dark"></button>
+    </div>
+    <div class="field-hint" data-i18n="appearance_hint"></div>
+    <label for="set-player" data-i18n="player_label"></label>
+    <input id="set-player" type="text" spellcheck="false" autocomplete="off">
+    <div class="field-hint" id="hint-player"></div>
+    <label for="set-game" data-i18n="game_label"></label>
+    <div class="field-row">
+      <input id="set-game" type="text" spellcheck="false" autocomplete="off">
+      <button type="button" class="btn" id="browse-game" data-i18n="browse"></button>
+    </div>
+    <div class="field-hint" id="hint-game"></div>
+    <div class="settings-error" id="settings-error" hidden></div>
+    <div class="settings-actions">
+      <button type="button" class="btn" id="settings-cancel" data-i18n="cancel"></button>
+      <button type="button" class="btn primary" id="settings-save" data-i18n="save"></button>
+    </div>
+    <div class="settings-danger" id="uninstall-zone" hidden>
+      <button type="button" class="btn-link danger" id="uninstall" data-i18n="uninstall"></button>
+    </div>
+  </div>
+
+  <div class="notices" id="notices" hidden></div>
+  <section class="kpis" id="kpis"></section>
+
+  <div class="table-card">
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr class="groups">
+            <th class="blank" colspan="2"></th>
+            <th class="spacer"></th>
+            <th colspan="3" data-i18n="group_qualifying"></th>
+            <th class="spacer"></th>
+            <th colspan="3" data-i18n="group_race"></th>
+            <th class="spacer"></th>
+            <th colspan="2" data-i18n="group_reference"></th>
+          </tr>
+          <tr class="cols" id="cols"></tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </div>
+  <footer id="footer"></footer>
+</div>
+
+<script>
+const DATA = /*__DATA__*/;
+
+// ---- Langues (français / anglais) ----
+// Tout texte visible de la page est ici, dans les deux langues, et lu par t(clé, {paramètres}) : un nouveau texte
+// se traduit toujours dans les deux dictionnaires. La langue est celle du réglage (DATA.language) ; la roue crantée
+// la change sans recharger la page (setLanguage). Les textes produits par Python sont dans lmu_dashboard/i18n.py.
+const I18N = {
+  fr: {
+    title: "Meilleurs temps",
+    refresh_aria: "Actualiser les données XML",
+    refresh_title: "Actualiser les données XML (dernière mise à jour : {date})",
+    refresh_offline: "Données du {date} — ouvrez LMU Chrono par son raccourci pour activer l'actualisation",
+    settings_title: "Réglages",
+    settings_offline: "Ouvrez LMU Chrono par son raccourci pour accéder aux réglages",
+    lang_label: "Langue",
+    theme_label: "Thème",
+    theme_auto: "Automatique", theme_light: "Clair", theme_dark: "Sombre",
+    appearance_hint: "Appliqué tout de suite. Automatique : thème de Windows.",
+    player_label: "Nom du pilote",
+    player_placeholder: "Votre nom de pilote dans le jeu",
+    player_hint_detected: "Laisser vide : détection automatique ({name}).",
+    player_hint_none: "Aucun pilote détecté pour l'instant.",
+    game_label: "Dossier du jeu",
+    game_hint_detected: "Laisser vide : dossier trouvé dans Steam.",
+    game_hint_none: "Introuvable dans Steam : indiquez le dossier du jeu.",
+    browse: "Parcourir…",
+    cancel: "Annuler",
+    save: "Enregistrer",
+    saving: "Relecture des résultats…",
+    uninstall: "Désinstaller LMU Chrono…",
+    uninstall_confirm: "Désinstaller LMU Chrono ?\n\nLe raccourci du bureau, le programme et toutes ses données (base des temps, images) seront supprimés. Les fichiers du jeu ne sont pas touchés.",
+    goodbye_title: "LMU Chrono a été désinstallé",
+    goodbye_text: "Le programme, son raccourci et ses données seront supprimés dans quelques secondes.",
+    goodbye_close: "Vous pouvez fermer cet onglet.",
+    toast_up_to_date: "Données à jour",
+    toast_refresh_failed: "Échec de l'actualisation : {error}",
+    toast_settings_unavailable: "Réglages indisponibles : {error}",
+    toast_uninstall_failed: "Échec de la désinstallation : {error}",
+    toast_language_failed: "Langue non enregistrée : {error}",
+    group_qualifying: "Qualification", group_race: "Course", group_reference: "Référence",
+    col_circuit: "Circuit", col_sessions: "Nb", col_time: "Temps", col_car: "Voiture", col_date: "Date",
+    col_reference: "Temps réf.", col_gap: "Écart",
+    col_sessions_title: "Nombre de sessions roulées (qualifications + courses)",
+    kpi_circuits: "Circuits", kpi_best: "Meilleur écart", kpi_avg: "Écart moyen", kpi_last: "Dernière session",
+    no_reference: "Pas de temps de référence",
+    no_reference_cell: "Pas de référence",
+    tier_elite: "Élite", tier_competitive: "Compétitif", tier_good: "Bon", tier_midpack: "Milieu",
+    tier_tail: "Fond grille", tier_off: "Hors rythme",
+    record_title: "Nouveau record. Ancien : {previous} (−{gain} s)",
+    empty_title: "Aucune session en {tab} pour l'instant",
+    empty_hint: "Tes meilleurs temps apparaîtront ici après ta première qualification ou course dans cette classe.",
+    no_data: "Aucune donnée.",
+    notice_game_missing: "Le Mans Ultimate est introuvable : indiquez son dossier dans les réglages (roue crantée, en haut à droite).",
+    notice_no_session: "Aucune session trouvée : jouez une qualification ou une course dans Le Mans Ultimate, puis cliquez sur ↻.",
+    notice_missing_maps: "Tracé manquant pour {n} circuit(s) : lancez Le Mans Ultimate (le menu principal suffit), puis cliquez sur ↻.",
+    footer: "★ meilleur tour de la ligne (base du calcul d'écart) ; « NEW » à sa place : record amélioré lors de la dernière actualisation. Temps de référence : colonne « ~100% » du {link}. Tracés, logos, drapeaux et polices : Le Mans Ultimate, lus dans votre installation du jeu. Projet de fan non officiel, sans lien avec les éditeurs du jeu.",
+    footer_link: "Google Sheets « LMU laptimes » d'Ohne Speed",
+  },
+  en: {
+    title: "Best times",
+    refresh_aria: "Refresh XML data",
+    refresh_title: "Refresh XML data (last update: {date})",
+    refresh_offline: "Data from {date} — open LMU Chrono from its shortcut to enable refreshing",
+    settings_title: "Settings",
+    settings_offline: "Open LMU Chrono from its shortcut to access the settings",
+    lang_label: "Language",
+    theme_label: "Theme",
+    theme_auto: "Automatic", theme_light: "Light", theme_dark: "Dark",
+    appearance_hint: "Applied immediately. Automatic: follows the Windows theme.",
+    player_label: "Driver name",
+    player_placeholder: "Your driver name in the game",
+    player_hint_detected: "Leave empty: automatic detection ({name}).",
+    player_hint_none: "No driver detected yet.",
+    game_label: "Game folder",
+    game_hint_detected: "Leave empty: folder found in Steam.",
+    game_hint_none: "Not found in Steam: enter the game folder.",
+    browse: "Browse…",
+    cancel: "Cancel",
+    save: "Save",
+    saving: "Re-reading results…",
+    uninstall: "Uninstall LMU Chrono…",
+    uninstall_confirm: "Uninstall LMU Chrono?\n\nThe desktop shortcut, the program and all its data (times database, images) will be deleted. The game files are not touched.",
+    goodbye_title: "LMU Chrono has been uninstalled",
+    goodbye_text: "The program, its shortcut and its data will be deleted in a few seconds.",
+    goodbye_close: "You can close this tab.",
+    toast_up_to_date: "Data up to date",
+    toast_refresh_failed: "Refresh failed: {error}",
+    toast_settings_unavailable: "Settings unavailable: {error}",
+    toast_uninstall_failed: "Uninstall failed: {error}",
+    toast_language_failed: "Language not saved: {error}",
+    group_qualifying: "Qualifying", group_race: "Race", group_reference: "Reference",
+    col_circuit: "Track", col_sessions: "No.", col_time: "Time", col_car: "Car", col_date: "Date",
+    col_reference: "Ref. time", col_gap: "Gap",
+    col_sessions_title: "Number of sessions driven (qualifying + races)",
+    kpi_circuits: "Tracks", kpi_best: "Best gap", kpi_avg: "Average gap", kpi_last: "Last session",
+    no_reference: "No reference time",
+    no_reference_cell: "No reference",
+    tier_elite: "Elite", tier_competitive: "Competitive", tier_good: "Good", tier_midpack: "Midpack",
+    tier_tail: "Tail-ender", tier_off: "Off pace",
+    record_title: "New record. Previous: {previous} (−{gain} s)",
+    empty_title: "No session in {tab} yet",
+    empty_hint: "Your best times will appear here after your first qualifying or race in this class.",
+    no_data: "No data.",
+    notice_game_missing: "Le Mans Ultimate not found: set its folder in the settings (gear icon, top right).",
+    notice_no_session: "No session found: play a qualifying or a race in Le Mans Ultimate, then click ↻.",
+    notice_missing_maps: "Track map missing for {n} track(s): start Le Mans Ultimate (the main menu is enough), then click ↻.",
+    footer: "★ best lap of the row (basis of the gap calculation); “NEW” in its place: record improved at the last refresh. Reference times: “~100%” column of the {link}. Track maps, logos, flags and fonts: Le Mans Ultimate, read from your game installation. Unofficial fan project, not affiliated with the game's publishers.",
+    footer_link: "“LMU laptimes” Google Sheets by Ohne Speed",
+  },
+};
+let lang = I18N[DATA.language] ? DATA.language : "fr";
+const t = (key, params = {}) => (I18N[lang][key] ?? I18N.fr[key] ?? key).replace(/\{(\w+)\}/g, (_, k) => params[k] ?? "");
+
+// Paliers du sheet d'Ohne Speed : ~100% Alien, 101% Competitive, 102-103% Good, 104-105% Midpack, 106% Tail-ender, 107% Offline
+const TIERS = [
+  { max: 0.01,     label: "tier_elite",       color: "--t-alien" },
+  { max: 0.02,     label: "tier_competitive", color: "--t-comp" },
+  { max: 0.04,     label: "tier_good",        color: "--t-good" },
+  { max: 0.06,     label: "tier_midpack",     color: "--t-mid" },
+  { max: 0.07,     label: "tier_tail",        color: "--t-tail" },
+  { max: Infinity, label: "tier_off",         color: "--t-off" },
+];
+const METER_MAX = 0.08;
+const tierOf = gap => TIERS.find(tier => gap < tier.max);
+
+// Colonnes triables ; label / title : clés de I18N ; sep: true = colonne d'espacement avant la colonne (début d'un bloc)
+const COLUMNS = [
+  { key: "circuit",  label: "col_circuit",   get: r => trackName(r) },
+  { key: "sessions", label: "col_sessions",  get: r => r.sessions, cls: "num", title: "col_sessions_title" },
+  { key: "q_time",   label: "col_time",      get: r => r.q?.best_lap, sep: true },
+  { key: "q_car",    label: "col_car",       get: r => r.q?.car },
+  { key: "q_date",   label: "col_date",      get: r => r.q?.date_iso },
+  { key: "c_time",   label: "col_time",      get: r => r.c?.best_lap, sep: true },
+  { key: "c_car",    label: "col_car",       get: r => r.c?.car },
+  { key: "c_date",   label: "col_date",      get: r => r.c?.date_iso },
+  { key: "alien",    label: "col_reference", get: r => r.alien, sep: true },
+  { key: "gap",      label: "col_gap",       get: r => r.gap },
+];
+const SPACER_TH = `<th class="spacer"></th>`, SPACER_TD = `<td class="spacer"></td>`;
+const COL_COUNT = COLUMNS.length + COLUMNS.filter(c => c.sep).length;
+
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+};
+
+let state = {
+  cls: DATA.classes.some(c => c.key === store.get("lmu-class")) ? store.get("lmu-class") : DATA.classes[0]?.key,
+  sort: "circuit",
+  dir: 1,
+};
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
+// Pourcentage : « +1.85 % » en français (espace avant le %), « +1.85% » en anglais
+const pct = g => (g >= 0 ? "+" : "") + (g * 100).toFixed(2) + (lang === "fr" ? " %" : "%");
+const asset = key => (key && DATA.assets[key]) || null;
+// Nom du pays (info-bulle du drapeau), dans la langue de la page
+const regionName = c => {
+  try { return new Intl.DisplayNames([lang], { type: "region" }).of(c.toUpperCase()); }
+  catch { return c.toUpperCase(); }
+};
+// Nom court du circuit (config.json "circuit_corresp_alien"), sinon le nom officiel du XML
+const trackName = r => r.short_name || r.circuit;
+
+// Le bouton d'actualisation appelle le serveur local (LMU Chrono lancé) ; ouverte en fichier, la page ne peut pas le faire
+const SERVED = location.protocol.startsWith("http");
+
+// Textes fixes du HTML (data-i18n, data-i18n-aria) et pied de page, dans la langue en vigueur
+function applyStatic() {
+  document.documentElement.lang = lang;
+  document.querySelectorAll("[data-i18n]").forEach(el => { el.textContent = t(el.dataset.i18n); });
+  document.querySelectorAll("[data-i18n-aria]").forEach(el => el.setAttribute("aria-label", t(el.dataset.i18nAria)));
+  $("footer").innerHTML = t("footer", { link: `<a id="sheet-link" href="${esc(DATA.sheet_url)}" target="_blank" rel="noopener">${esc(t("footer_link"))}</a>` });
+}
+
+function renderHeader() {
+  $("favicon").href = DATA.favicon;
+  $("player").textContent = DATA.player;
+  // Messages d'aide : { key, n } produits par Python, traduits ici
+  $("notices").innerHTML = DATA.notices.map(n => `<p>${esc(t(n.key, n))}</p>`).join("");
+  $("notices").hidden = !DATA.notices.length;
+  if (asset(DATA.logo)) {
+    $("brand-logo").src = asset(DATA.logo);
+    $("brand-logo").hidden = false;
+    $("brand-mark").hidden = true;
+  }
+  $("refresh-xml").title = t(SERVED ? "refresh_title" : "refresh_offline", { date: DATA.generated_at });
+  $("settings-btn").title = t(SERVED ? "settings_title" : "settings_offline");
+}
+
+function renderTabs() {
+  // Badge de classe du jeu (config.json "badge", "badge_corner"), dans l'ordre inverse de la config (Hypercar à gauche … GT3 à droite)
+  $("tabs").innerHTML = [...DATA.classes].reverse().map(c => {
+    const cls = ["class-badge", c.badge.length <= 2 ? "short" : "", c.badge_corner ? "corner" : ""].join(" ");
+    const corner = c.badge_corner ? ` style="--corner:#${c.badge_corner}"` : "";
+    return `<button class="tab" role="tab" style="--c:#${c.color}" aria-selected="${c.key === state.cls}"
+              data-key="${esc(c.key)}" title="${esc(c.name)}"><span class="${cls}"${corner}>${esc(c.badge)}</span></button>`;
+  }).join("");
+}
+
+function renderKpis(cls) {
+  const rows = cls.rows;
+  const withGap = rows.filter(r => r.gap != null);
+  const bestRow = withGap.reduce((a, r) => (!a || r.gap < a.gap ? r : a), null);
+  const avg = withGap.length ? withGap.reduce((s, r) => s + r.gap, 0) / withGap.length : null;
+  // Session la plus récente, gardée avec sa ligne pour connaître le circuit
+  const last = rows.flatMap(r => [r.q, r.c].filter(Boolean).map(s => ({ s, r })))
+                   .sort((a, b) => b.s.date_iso.localeCompare(a.s.date_iso))[0];
+  // track : nom du circuit affiché à côté de la valeur ; circuit : ligne du tableau visée au clic
+  const tile = (key, label, value, hint, track, circuit) =>
+    `<div class="kpi" data-k="${key}"${circuit ? ` data-circuit="${esc(circuit)}"` : ""}><div class="label">${label}</div>
+       ${track ? `<div class="value split"><span class="v-main">${value}</span><span class="v-sep"></span><span class="v-track">${esc(track)}</span></div>`
+               : `<div class="value">${value}</div>`}
+       <div class="hint">${hint}</div></div>`;
+  // Classe sans session : tirets, sans message « Pas de temps de référence » (rien n'est à comparer)
+  const noRef = rows.length ? t("no_reference") : "";
+  $("kpis").innerHTML = [
+    tile("circuits", t("kpi_circuits"), rows.length, ""),
+    tile("best", t("kpi_best"), bestRow ? pct(bestRow.gap) : "—", bestRow ? "" : noRef, bestRow && trackName(bestRow), bestRow?.circuit),
+    tile("avg", t("kpi_avg"), avg != null ? pct(avg) : "—", avg != null ? "" : noRef),
+    tile("last", t("kpi_last"), last ? last.s.time : "—", "", last && trackName(last.r), last?.r.circuit),
+  ].join("");
+}
+
+function carHtml(s) {
+  // Logo officiel du jeu : une version par thème (la page affiche celle qui correspond au fond) ; sans logo, le nom de la marque
+  const logo = s.logo
+    ? `<img class="logo on-light" src="${asset(s.logo_light)}" alt=""><img class="logo on-dark" src="${asset(s.logo)}" alt="">`
+    : s.brand ? `<span class="brand-name">${esc(s.brand)}</span>` : "";
+  return `<span class="brand-car">${logo}<span>${esc(s.model)}</span></span>`;
+}
+
+function circuitHtml(r) {
+  // Comme l'écran du jeu : tracé du circuit | drapeau + nom court en majuscules (nom officiel en info-bulle)
+  const map = asset(r.track_map), flag = asset(r.flag);
+  return `<div class="circ">
+    <span class="cg-visual">${map ? `<img src="${map}" alt="">` : ""}</span>
+    <span class="cg-sep"></span>
+    <span class="cg-label">
+      ${flag ? `<img class="cg-flag" src="${flag}" alt="${esc(r.country)}" title="${esc(regionName(r.country))}">` : ""}
+      <span class="cg-name" title="${esc(r.circuit)}">${esc(trackName(r))}</span>
+    </span>
+  </div>`;
+}
+
+function sessionCells(s, isBest) {
+  if (!s) return `<td class="empty">—</td><td></td><td></td>`;
+  // Badge « New » (nouveau record : temps amélioré lors de la dernière actualisation), à la place de l'étoile
+  const gain = lang === "fr" ? s.record_gain?.toFixed(2).replace(".", ",") : s.record_gain?.toFixed(2);   // 0,62 / 0.62
+  const record = s.record_previous_time
+    ? `<span class="record-badge" title="${esc(t("record_title", { previous: s.record_previous_time, gain }))}">NEW</span>`
+    : "";
+  return `<td><span class="time ${isBest ? "best" : "other"}${record ? " has-record" : ""}">${s.time}</span>${record}</td>
+          <td class="car" title="${esc(s.car)}">${carHtml(s)}</td>
+          <td class="date-cell"><span class="day">${esc(s.day)}</span><span class="hour">${esc(s.hour)}</span></td>`;
+}
+
+function gapCell(r) {
+  if (r.gap == null) return `<td><span class="empty">${t("no_reference_cell")}</span></td>`;
+  const tier = tierOf(r.gap);
+  const w = Math.max(0, Math.min(r.gap, METER_MAX)) / METER_MAX * 100;
+  const ticks = TIERS.slice(0, -1).map(x => `<span class="tick" style="left:${x.max / METER_MAX * 100}%"></span>`).join("");
+  const title = `${trackName(r)}${lang === "fr" ? " : " : ": "}${r.best_time} vs ${r.alien_time} (${pct(r.gap)}, ${t(tier.label)})`;
+  return `<td><div class="gap" style="--tier:var(${tier.color})" title="${esc(title)}">
+    <span class="pct">${pct(r.gap)}</span>
+    <span class="meter"><span class="fill" style="width:${w}%"></span>${ticks}</span>
+    <span class="badge">${t(tier.label)}</span></div></td>`;
+}
+
+function rowHtml(r) {
+  const qBest = r.q && r.q.best_lap === r.best;
+  return `
+    <tr data-circuit="${esc(r.circuit)}">
+      <td>${circuitHtml(r)}</td>
+      <td class="sessions">${r.sessions}</td>
+      ${SPACER_TD}${sessionCells(r.q, qBest)}
+      ${SPACER_TD}${sessionCells(r.c, r.c && r.c.best_lap === r.best && !qBest)}
+      ${SPACER_TD}<td class="alien">${r.alien_time || '<span class="empty">—</span>'}</td>
+      ${gapCell(r)}
+    </tr>`;
+}
+
+function headerCell(c, extraClass = "", arrow = "▲") {
+  return (c.sep ? SPACER_TH : "") +
+    `<th class="${c.cls || ""} ${extraClass}" data-key="${c.key}"${c.title ? ` title="${esc(t(c.title))}"` : ""}>${t(c.label)}<span class="arrow">${arrow}</span></th>`;
+}
+
+function renderTable(cls) {
+  $("cols").innerHTML = COLUMNS.map(c => headerCell(c, state.sort === c.key ? "sorted" : "",
+                                                    state.sort === c.key && state.dir < 0 ? "▼" : "▲")).join("");
+  const col = COLUMNS.find(c => c.key === state.sort);
+  const rows = [...cls.rows].sort((a, b) => {
+    const va = col.get(a), vb = col.get(b);
+    if (va == null && vb == null) return 0;
+    if (va == null) return 1;   // valeurs manquantes toujours en bas
+    if (vb == null) return -1;
+    return (typeof va === "string" ? va.localeCompare(vb) : va - vb) * state.dir;
+  });
+  $("rows").innerHTML = rows.length ? rows.map(rowHtml).join("")
+    : `<tr class="none-row"><td colspan="${COL_COUNT}">
+         <div class="empty-state">
+           <div class="empty-title">${esc(t("empty_title", { tab: cls.tab }))}</div>
+           <div class="empty-hint">${esc(t("empty_hint"))}</div>
+         </div></td></tr>`;
+  alignLogos();
+}
+
+// Logos des marques : dans les fichiers du jeu, le dessin n'est pas toujours centré dans son cadre (marge vide en
+// haut ou en bas, propre à chaque logo). La partie visible de chaque logo est mesurée une fois (canvas) : seuls
+// comptent les pixels qui se distinguent du fond sur lequel ce logo est affiché (une partie bleu foncé est presque
+// invisible sur fond sombre). Chaque logo est ensuite décalé pour que son dessin visible, et non son cadre, soit
+// centré sur le nom du modèle.
+const LOGO_BOX = { width: 46, height: 22 };   // max-width et height de .logo (CSS)
+// Le nom du modèle (Heebo 13 px) a son encre ~1 px au-dessus du centre de la cellule : le logo vise ce point
+const LOGO_TEXT_OFFSET = 1;
+const LOGO_BG = { "on-dark": [12, 13, 17], "on-light": [243, 244, 247] };   // --bg des thèmes sombre et clair
+const logoInk = new Map();   // version + src -> { top, bottom (fractions de la hauteur du dessin), ratio largeur / hauteur }
+function measureLogo(src, version) {
+  return new Promise(resolve => {
+    const im = new Image();
+    im.onload = () => {
+      const ratio = im.naturalWidth && im.naturalHeight ? im.naturalWidth / im.naturalHeight : 1;
+      const h = 220, w = Math.max(1, Math.min(2000, Math.round(h * ratio)));
+      const canvas = Object.assign(document.createElement("canvas"), { width: w, height: h });
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(im, 0, 0, w, h);
+      const px = ctx.getImageData(0, 0, w, h).data;
+      const inkRows = bg => {   // première et dernière ligne où le logo, posé sur ce fond, se distingue du fond
+        const visible = i => {
+          const a = px[i + 3] / 255;
+          return a > 0.15 && [0, 1, 2].reduce((d, k) => d + Math.abs(a * px[i + k] + (1 - a) * bg[k] - bg[k]), 0) > 90;
+        };
+        const inked = y => { for (let x = 0; x < w; x++) if (visible((y * w + x) * 4)) return true; return false; };
+        let top = 0, bottom = h - 1;
+        while (top < h && !inked(top)) top++;
+        while (bottom > top && !inked(bottom)) bottom--;
+        return top < h ? [top, bottom] : null;
+      };
+      let rows = inkRows(LOGO_BG[version]), darken = false;
+      if (!rows && version === "on-light") {
+        // Logo blanc sans version « fond clair » dans le jeu (ex. ADESS) : invisible sur fond clair, affiché en noir
+        rows = inkRows(LOGO_BG["on-dark"]);
+        darken = !!rows;
+      }
+      if (rows) logoInk.set(version + src, { top: rows[0] / h, bottom: (rows[1] + 1) / h, ratio, darken });
+      resolve();
+    };
+    im.onerror = resolve;
+    im.src = src;
+  });
+}
+function alignLogos() {
+  document.querySelectorAll("#rows img.logo").forEach(img => {
+    const ink = logoInk.get((img.classList.contains("on-dark") ? "on-dark" : "on-light") + img.getAttribute("src"));
+    if (!ink) return;
+    // Calcul sur la taille de la boîte (et non la taille affichée : la version de l'autre thème est masquée)
+    const drawH = Math.min(LOGO_BOX.height, LOGO_BOX.width / ink.ratio);   // object-fit: contain
+    const inkCenter = (LOGO_BOX.height - drawH) / 2 + (ink.top + ink.bottom) / 2 * drawH;
+    img.style.transform = `translateY(${(LOGO_BOX.height / 2 - LOGO_TEXT_OFFSET - inkCenter).toFixed(2)}px)`;
+    if (ink.darken) img.style.filter = "brightness(0) opacity(.85)";
+  });
+}
+const logoVersions = new Map(DATA.classes.flatMap(c => c.rows).flatMap(r => [r.q, r.c]).filter(s => s && s.logo)
+  .flatMap(s => [["on-dark" + asset(s.logo), ["on-dark", asset(s.logo)]], ["on-light" + asset(s.logo_light), ["on-light", asset(s.logo_light)]]]));
+Promise.all([...logoVersions.values()].map(([version, src]) => measureLogo(src, version))).then(alignLogos);
+
+// Largeur de chaque colonne = la plus grande observée sur toutes les classes.
+// On rend toutes les lignes dans un tableau invisible en mise en page automatique, on mesure,
+// puis on impose ces largeurs (colgroup) au tableau affiché : elles ne changent plus d'un onglet à l'autre.
+// Largeur de chaque colonne telle que la donnerait une langue (libellés des en-têtes, textes des cellules)
+function measureWidths(language) {
+  const saved = lang;
+  lang = language;
+  const box = document.createElement("div");
+  box.style.cssText = "position:absolute; left:-99999px; top:0; visibility:hidden";
+  // Ligne témoin « 8888 » : la colonne NB est réservée pour 4 chiffres au plus
+  box.innerHTML = `<table style="table-layout:auto"><thead><tr class="cols">${COLUMNS.map(c => headerCell(c)).join("")}</tr></thead>
+    <tbody>${DATA.classes.flatMap(c => c.rows).map(rowHtml).join("")}</tbody></table>
+    <table><tbody><tr><td class="sessions" id="digits-probe">8888</td></tr></tbody></table>`;
+  document.body.appendChild(box);
+  const ths = [...box.querySelectorAll("thead th")];
+  const widths = ths.map(th => Math.ceil(th.getBoundingClientRect().width));
+  // Colonne NB : largeur de 4 chiffres (ou de l'en-tête s'il est plus large), quel que soit le contenu
+  const sessionsIdx = ths.findIndex(th => th.classList.contains("num"));
+  widths[sessionsIdx] = Math.max(Math.ceil(box.querySelector("#digits-probe").getBoundingClientRect().width),
+                                 Math.ceil(ths[sessionsIdx].getBoundingClientRect().width));
+  box.remove();
+  lang = saved;
+  return { widths, sessionsIdx };
+}
+
+function measureColumns() {
+  // Mêmes proportions dans toutes les langues : chaque colonne prend la plus grande de ses largeurs parmi les
+  // langues. Le français, aux libellés les plus longs, donne les proportions ; l'anglais, plus court, les reprend
+  // (tableau et encarts ne changent pas de taille quand on change de langue, et aucun libellé n'est coupé).
+  const measures = Object.keys(I18N).map(measureWidths);
+  const sessionsIdx = measures[0].sessionsIdx;
+  const widths = measures[0].widths.map((_, i) => Math.max(...measures.map(m => m.widths[i])));
+
+  const table = document.querySelector(".table-card table");
+  table.querySelector("colgroup")?.remove();
+  table.insertAdjacentHTML("afterbegin", `<colgroup>${widths.map(w => `<col style="width:${w}px">`).join("")}</colgroup>`);
+  const tableW = widths.reduce((a, b) => a + b, 0);
+  table.style.width = tableW + "px";
+  // Largeur max de la page, et largeur des encarts : celle du tableau, colonne NB exclue
+  document.documentElement.style.setProperty("--table-full-w", tableW + "px");
+  document.documentElement.style.setProperty("--table-w", tableW - widths[sessionsIdx] + "px");
+}
+
+function render() {
+  const cls = DATA.classes.find(c => c.key === state.cls);
+  renderTabs();
+  if (!cls) { $("rows").innerHTML = `<tr class="none-row"><td colspan="${COL_COUNT}">${esc(t("no_data"))}</td></tr>`; return; }
+  document.body.style.setProperty("--c", "#" + cls.color);
+  $("h1-class").textContent = cls.name;
+  renderKpis(cls);
+  renderTable(cls);
+}
+
+$("tabs").addEventListener("click", e => {
+  const btn = e.target.closest(".tab");
+  if (!btn) return;
+  state.cls = btn.dataset.key;
+  store.set("lmu-class", state.cls);
+  render();
+});
+$("cols").addEventListener("click", e => {
+  const th = e.target.closest("th[data-key]");
+  if (!th) return;
+  state.dir = state.sort === th.dataset.key ? -state.dir : 1;
+  state.sort = th.dataset.key;
+  render();
+});
+// Encarts cliquables : Meilleur écart / Dernière session → ligne du circuit (surbrillance) ; Écart moyen → tri par écart
+$("kpis").addEventListener("click", e => {
+  const kpi = e.target.closest(".kpi");
+  if (!kpi) return;
+  if (kpi.dataset.k === "avg") { state.sort = "gap"; state.dir = 1; render(); return; }
+  const tr = [...$("rows").rows].find(r => r.dataset.circuit === kpi.dataset.circuit);
+  if (!tr) return;
+  tr.scrollIntoView({ behavior: "smooth", block: "center" });
+  tr.classList.remove("flash"); void tr.offsetWidth; tr.classList.add("flash");
+});
+
+let toastTimer;
+function toast(message, isError) {
+  const el = $("toast");
+  el.textContent = message;
+  el.classList.toggle("error", !!isError);
+  el.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.hidden = true; }, 6000);
+}
+// Message laissé par une actualisation, affiché après le rechargement de la page
+try {
+  const pending = sessionStorage.getItem("lmu-toast");
+  if (pending) { sessionStorage.removeItem("lmu-toast"); toast(pending); }
+} catch {}
+
+const refreshBtn = $("refresh-xml");
+if (!SERVED) {
+  refreshBtn.disabled = true;   // l'info-bulle (renderHeader) explique comment l'activer
+} else {
+  refreshBtn.addEventListener("click", async () => {
+    refreshBtn.disabled = true;
+    refreshBtn.classList.add("busy");
+    try {
+      const res = await fetch("/api/refresh-xml", { method: "POST" });
+      const out = await res.json();
+      if (!out.ok) throw new Error(out.message);
+      try { sessionStorage.setItem("lmu-toast", out.message || t("toast_up_to_date")); } catch {}
+      location.reload();
+    } catch (e) {
+      toast(t("toast_refresh_failed", { error: e.message }), true);
+      refreshBtn.classList.remove("busy");
+      refreshBtn.disabled = false;
+    }
+  });
+}
+
+async function post(path, body) {
+  const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) });
+  return res.json();
+}
+
+// Changement de langue : tout le texte de la page est refait dans la nouvelle langue, les largeurs de colonnes sont
+// remesurées (les libellés n'ont pas la même longueur), et le choix est enregistré par le serveur (menu de l'icône,
+// messages de mise à jour et page régénérée suivent).
+function refreshLanguage() {
+  applyStatic();
+  renderHeader();
+  render();
+  measureColumns();
+  fillSettingsTexts();
+  showLangChoice();
+}
+async function setLanguage(next) {
+  if (next === lang || !I18N[next]) return;
+  lang = next;
+  refreshLanguage();
+  try {
+    const out = await post("/api/language", { language: next });
+    if (!out.ok) throw new Error(out.message);
+  } catch (e) {
+    toast(t("toast_language_failed", { error: e.message }), true);
+  }
+}
+// Choix de la langue : drapeaux du jeu (Royaume-Uni pour l'anglais) et nom de la langue, dans leur propre langue
+function buildLangChoice() {
+  $("lang-choice").innerHTML = [["fr", "Français"], ["en", "English"]].map(([code, name]) => {
+    const flag = asset(DATA.language_flags?.[code]);
+    return `<button type="button" data-v="${code}" title="${name}">${flag ? `<img class="lang-flag" src="${flag}" alt="">` : ""}<span>${name}</span></button>`;
+  }).join("");
+  showLangChoice();
+}
+function showLangChoice() {
+  document.querySelectorAll("#lang-choice button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === lang));
+}
+$("lang-choice").addEventListener("click", e => {
+  const b = e.target.closest("button");
+  if (b) setLanguage(b.dataset.v);
+});
+
+// Réglages (roue crantée) : langue, thème, nom du pilote, dossier du jeu (vides = détection automatique), désinstallation
+const settingsBtn = $("settings-btn"), settingsPanel = $("settings");
+let settingsData = null;   // dernières valeurs lues sur le serveur
+function placeSettings() {
+  // Fenêtre alignée à droite sous le bouton (elle est hors du bandeau, qui masque ce qui dépasse)
+  const r = settingsBtn.getBoundingClientRect();
+  settingsPanel.style.top = r.bottom + scrollY + 10 + "px";
+  settingsPanel.style.left = Math.max(16, r.right + scrollX - settingsPanel.offsetWidth) + "px";
+}
+function showSettingsError(message) {
+  $("settings-error").textContent = message;
+  $("settings-error").hidden = !message;
+}
+// Placeholders et indications des champs, dans la langue en vigueur (les valeurs saisies ne sont pas touchées)
+function fillSettingsTexts() {
+  if (!settingsData) return;
+  const s = settingsData;
+  $("set-player").placeholder = s.player_detected || t("player_placeholder");
+  $("hint-player").textContent = s.player_detected ? t("player_hint_detected", { name: s.player_detected }) : t("player_hint_none");
+  $("set-game").placeholder = s.game_detected || "…\\steamapps\\common\\Le Mans Ultimate";
+  $("hint-game").textContent = s.game_detected ? t("game_hint_detected") : t("game_hint_none");
+}
+async function openSettings() {
+  settingsData = await (await fetch("/api/settings")).json();
+  $("set-player").value = settingsData.player_name;
+  $("set-game").value = settingsData.game_dir;
+  fillSettingsTexts();
+  $("uninstall-zone").hidden = !settingsData.can_uninstall;
+  showLangChoice();
+  showThemeChoice();
+  showSettingsError("");
+  settingsPanel.hidden = false;
+  settingsBtn.setAttribute("aria-expanded", "true");
+  placeSettings();
+  $("set-player").focus();
+}
+function showThemeChoice() {
+  document.querySelectorAll("#theme-choice button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === lmuTheme.get()));
+}
+$("theme-choice").addEventListener("click", e => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  lmuTheme.set(b.dataset.v);   // script de tête : mémorise le choix et l'applique
+  showThemeChoice();
+});
+function closeSettings() {
+  settingsPanel.hidden = true;
+  settingsBtn.setAttribute("aria-expanded", "false");
+}
+
+if (!SERVED) {
+  settingsBtn.disabled = true;   // l'info-bulle (renderHeader) explique comment l'activer
+} else {
+  settingsBtn.addEventListener("click", () => {
+    if (!settingsPanel.hidden) return closeSettings();
+    openSettings().catch(e => toast(t("toast_settings_unavailable", { error: e.message }), true));
+  });
+  $("settings-cancel").addEventListener("click", closeSettings);
+  document.addEventListener("click", e => {
+    if (!settingsPanel.hidden && !settingsPanel.contains(e.target) && !settingsBtn.contains(e.target)) closeSettings();
+  });
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && !settingsPanel.hidden) closeSettings(); });
+  addEventListener("resize", () => { if (!settingsPanel.hidden) placeSettings(); });
+
+  $("browse-game").addEventListener("click", async () => {
+    // Fenêtre Windows de choix de dossier, ouverte par LMU Chrono (une page web ne connaît pas les chemins)
+    const btn = $("browse-game");
+    btn.disabled = true;
+    try {
+      const out = await post("/api/browse-game-dir", { initial: $("set-game").value });
+      if (out.path) $("set-game").value = out.path;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  $("settings-save").addEventListener("click", async () => {
+    const btn = $("settings-save");
+    btn.disabled = true;
+    btn.textContent = t("saving");
+    showSettingsError("");
+    try {
+      const out = await post("/api/settings", { player_name: $("set-player").value, game_dir: $("set-game").value });
+      if (!out.ok) throw new Error(out.message);
+      try { sessionStorage.setItem("lmu-toast", out.message); } catch {}
+      location.reload();
+    } catch (e) {
+      showSettingsError(e.message);
+      btn.disabled = false;
+      btn.textContent = t("save");
+    }
+  });
+
+  $("uninstall").addEventListener("click", async () => {
+    if (!confirm(t("uninstall_confirm"))) return;
+    try {
+      const out = await post("/api/uninstall");
+      if (!out.ok) throw new Error(out.message);
+      document.body.innerHTML = `<div class="goodbye"><h1>${esc(t("goodbye_title"))}</h1>
+        <p>${esc(t("goodbye_text"))}</p>
+        <p>${esc(t("goodbye_close"))}</p></div>`;
+    } catch (e) {
+      toast(t("toast_uninstall_failed", { error: e.message }), true);
+    }
+  });
+}
+
+// Polices du jeu (extraites de Bin\UI.zip), intégrées à la page
+document.head.insertAdjacentHTML("beforeend", "<style>" + DATA.fonts
+  .filter(f => asset(f.src))
+  .map(f => `@font-face { font-family: "${f.family}"; font-weight: ${f.weight}; src: url("${asset(f.src)}") format("truetype"); }`)
+  .join("\n") + "</style>");
+
+buildLangChoice();
+applyStatic();
+renderHeader();
+render();
+measureColumns();
+// Les polices sont prêtes après le premier rendu et changent les largeurs : on remesure une fois chargées
+document.fonts?.ready.then(measureColumns);
+</script>
+</body>
+</html>
